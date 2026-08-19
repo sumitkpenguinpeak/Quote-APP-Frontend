@@ -68,12 +68,14 @@ export function sendTestEmail (type, email) {
   return api.post(`/email-templates/${type}/test`, { email });
 }
 
-// Attach the shop parameter to every outgoing request automatically.
+// Attach the shop domain to every outgoing request as a header (instead of
+// a query string param) so it matches the Laravel backend's ResolveShop
+// middleware, which checks X-Shopify-Shop-Domain first.
 api.interceptors.request.use((config) => {
   const shop = getShopFromUrl();
 
   if (shop) {
-    config.params = { ...config.params, shop };
+    config.headers = { ...config.headers, 'X-Shopify-Shop-Domain': shop };
   }
 
   return config;

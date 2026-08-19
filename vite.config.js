@@ -7,21 +7,43 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+
     allowedHosts: [
-      'cache-arrest-verdict.ngrok-free.dev'
+      'saddlebag-document-filler.ngrok-free.dev'
     ],
-    // HMR Configuration
-    // Do NOT bind server to the remote ngrok IP (that caused EADDRNOTAVAIL).
-    // Provide client-side connection info only so the browser connects via secure WSS.
+
     hmr: {
       protocol: 'wss',
+      host: 'saddlebag-document-filler.ngrok-free.dev',
       clientPort: 443
     },
-    // Watch configuration for file changes
+
+    proxy: {
+      // Laravel API
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+
+      // Shopify OAuth / authentication routes
+      '/auth': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+
+      // Shopify webhooks, if your Laravel routes use /webhooks
+      '/webhooks': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+
     watch: {
       usePolling: true,
       interval: 300
     }
-    
   }
 });
