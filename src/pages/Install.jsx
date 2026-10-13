@@ -76,7 +76,7 @@ export default function Install() {
           </Button>
 
           <Banner tone="info">
-            You can find your store URL in Shopify Admin → Settings → Domains or in your browser’s address bar as admin.shopify.com/store/<name>.
+            You can find your store URL in Shopify Admin → Settings → Domains or in your browser’s address bar as admin.shopify.com/store/name.
           </Banner>
         </BlockStack>
       </Card>
