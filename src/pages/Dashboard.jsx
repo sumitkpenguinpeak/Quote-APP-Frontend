@@ -8,7 +8,7 @@ import {
   CalendarIcon, ChartVerticalIcon, XIcon, ReceiptIcon, ImageIcon,
 } from '@shopify/polaris-icons';
 import AppLayout from '../components/AppLayout';
-import LineChart from '../components/LineChart';
+import LineChart from '../components/Linechart';
 import useShop from '../hooks/useShop';
 import api from '../services/api';
 import { useAppEmbed } from '../context/AppEmbedContext';

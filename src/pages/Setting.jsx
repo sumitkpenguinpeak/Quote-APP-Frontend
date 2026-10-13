@@ -44,7 +44,7 @@ import FormattingStandardsBar from '../components/FormattingStandardsBar.jsx'
 import CustomCSS from '../components/CustomCSS.jsx'
 import EmailConfiguration from '../components/EmailConfiguration.jsx'
 import Quotepdftemplateeditor  from '../components/Quotepdftemplateeditor.jsx'
-import InvoicePdfTemplateEditor  from '../components/InvoicePdfTemplateEditor.jsx'
+import InvoicePdfTemplateEditor  from '../components/Invoicepdftemplateeditor.jsx'
 import AppBridgeSaveBar from '../components/AppBridgeSaveBar.jsx'
 import { sendTestEmail, updateEmailTemplate, getEmailTemplate } from '../services/api';
 import usePlan from '../hooks/usePlan';
