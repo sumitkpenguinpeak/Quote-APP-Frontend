@@ -5,6 +5,7 @@ import '@shopify/polaris/build/esm/styles.css';
 import en from '@shopify/polaris/locales/en.json';
 
 import Login from './pages/Login';
+import Install from './pages/Install';
 import Entry from './pages/Entry';
 import Dashboard from './pages/Dashboard';
 import Billing from './pages/Billing';
@@ -29,6 +30,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Entry />} />
             <Route path="/login" element={<Login />} />
+            {/* Public install page: store URL nakho -> backend /api/install -> Shopify OAuth */}
+            <Route path="/install" element={<Install />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/quotelist" element={guard(<QuoteList />)} />
             <Route path="/quotedetail/:id" element={guard(<QuoteDetail />)} />

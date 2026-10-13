@@ -18,3 +18,8 @@ use_legacy_install_flow = false
 redirect_urls = [
   "https://phplaravel-1446948-6722720.cloudwaysapps.com/api/auth/callback"
 ]
+
+[app_proxy]
+url = "https://phplaravel-1446948-6722720.cloudwaysapps.com/api/proxy"
+subpath = "quote-app"
+prefix = "apps"

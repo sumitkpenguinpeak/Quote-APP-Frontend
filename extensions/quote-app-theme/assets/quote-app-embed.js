@@ -206,6 +206,9 @@
         st.textContent =
             '.pp-quote-header-link{position:relative;display:inline-flex;align-items:center;justify-content:center;color:inherit;text-decoration:none;}' +
             '.pp-quote-header-link svg{width:24px;height:24px;display:block;}' +
+            // newer themes (Horizon): header-actions na icons 20px chhe, tema jevo j size
+            '.header-actions__action.pp-quote-header-link{display:inline-flex;align-items:center;justify-content:center;position:relative;cursor:pointer;}' +
+            '.header-actions__action.pp-quote-header-link svg{width:20px;height:20px;}' +
             '.pp-quote-count{position:absolute;top:-6px;right:-8px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;' +
             'border-radius:999px;background:#000;color:#fff;font-size:11px;line-height:18px;text-align:center;font-weight:600;}';
         (document.head || document.documentElement).appendChild(st);
@@ -220,7 +223,10 @@
 
         // theme ma cart icon shodho (header ni andar)
         const cartEl = document.querySelector(
-            'header a[href="/cart"], header a[href$="/cart"], header a[href*="/cart?"], header [id*="cart-icon" i], header .header__icon--cart'
+            // Dawn/classic themes + newer themes (Horizon: <header-actions> ma cart <button> hoy chhe, link nahi)
+            'header a[href="/cart"], header a[href$="/cart"], header a[href*="/cart?"], header [id*="cart-icon" i], header .header__icon--cart, ' +
+            'header [data-testid="cart-drawer-trigger"], header button[aria-controls="cart-drawer"], header .header-actions__action[aria-label*="cart" i], ' +
+            'header cart-icon, header cart-drawer-trigger, header [class*="cart-icon" i]'
         );
         if (!cartEl) return;
         const cartAnchor = cartEl.closest('a, button') || cartEl;
