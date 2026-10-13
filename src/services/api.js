@@ -7,11 +7,13 @@ import { useEffect } from 'react';
  * parameter to every request so the backend's VerifyShop middleware can
  * identify the merchant.
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
+// Auth is the App Bridge session token (Authorization: Bearer <JWT>), not cookies, so the
+// admin app works with third-party cookies / storage blocked (e.g. incognito Chrome).
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  withCredentials: false,
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -25,7 +27,40 @@ const api = axios.create({
  */
 export function getShopFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  return params.get('shop') || localStorage.getItem('shopurl') || '';
+  const fromUrl = params.get('shop');
+  if (fromUrl) return fromUrl;
+  // App Bridge exposes the shop of the embedded session; no storage needed.
+  return window.shopify?.config?.shop || '';
+}
+
+/**
+ * Starts (or restarts) the install / OAuth flow. Must be a TOP-level navigation
+ * (the OAuth screens cannot render inside the admin iframe). Uses the signed query
+ * Shopify added when it loaded the app (kept in launchQuery by main.jsx).
+ */
+export function startInstall() {
+  const query = getLaunchQuery();
+  const target = `${API_BASE_URL}/install${query}`;
+  if (!query) return false;
+  if (window.top !== window.self) {
+    window.open(target, '_top');
+  } else {
+    window.location.href = target;
+  }
+  return true;
+}
+
+let launchQueryMemo = '';
+export function rememberLaunchQuery() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('shop') && params.get('hmac')) {
+    launchQueryMemo = `?${params.toString()}`;
+    try { sessionStorage.setItem('quoteapp:launch', launchQueryMemo); } catch { /* storage blocked: memory copy is enough */ }
+  }
+}
+function getLaunchQuery() {
+  if (launchQueryMemo) return launchQueryMemo;
+  try { return sessionStorage.getItem('quoteapp:launch') || ''; } catch { return ''; }
 }
 
 // Custome Api Function
@@ -58,6 +93,10 @@ export function getQuoteEmail (){
  return mail;
 }
 
+export function getEmailTemplate (type, payload){
+  if (!type) return null;
+  return api.get(`/email-templates/${type}`);
+} 
 export function updateEmailTemplate (type, payload){
   if (!type) return null;
   return api.put(`/email-templates/${type}`, payload);
@@ -68,14 +107,25 @@ export function sendTestEmail (type, email) {
   return api.post(`/email-templates/${type}/test`, { email });
 }
 
-// Attach the shop domain to every outgoing request as a header (instead of
-// a query string param) so it matches the Laravel backend's ResolveShop
-// middleware, which checks X-Shopify-Shop-Domain first.
-api.interceptors.request.use((config) => {
-  const shop = getShopFromUrl();
+// Email configuration (connected sender account)
+export function getEmailConfig() {
+  return api.get('/email-config');
+}
 
-  if (shop) {
-    config.headers = { ...config.headers, 'X-Shopify-Shop-Domain': shop };
+export function getEmailConnectUrl() {
+  return api.get('/email-config/connect');
+}
+
+export function disconnectEmailConfig() {
+  return api.delete('/email-config');
+}
+
+// Attach a fresh App Bridge session token (short-lived JWT) to every request. The backend
+// derives the shop from this signed token - never from a client supplied value.
+api.interceptors.request.use(async (config) => {
+  if (window.shopify?.idToken) {
+    const token = await window.shopify.idToken();
+    config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
   }
 
   return config;
@@ -90,9 +140,20 @@ api.interceptors.response.use(
     const shop = getShopFromUrl();
 
     if (status === 402) {
-      window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
-    } else if (status === 401) {
-      window.location.href = `/login?shop=${encodeURIComponent(shop)}`;
+      // Install pachhi plan select nathi karyo -> pricing page (loop na thay etle pricing par hoy to redirect nahi)
+      if (error.response?.data?.code === 'plan_not_selected') {
+        if (window.location.pathname !== '/pricing') {
+          window.location.href = `/pricing?shop=${encodeURIComponent(shop)}`;
+        }
+      } else {
+        window.location.href = `/billing?shop=${encodeURIComponent(shop)}`;
+      }
+    } else if (status === 401 && !error.config?.skipAuthRedirect) {
+      // Not installed / scopes changed / token rejected -> run the install flow again
+      // (top level), or show the "open from Shopify admin" screen when we cannot.
+      if (!startInstall() && window.location.pathname !== '/login') {
+        window.location.href = `/login?shop=${encodeURIComponent(shop)}`;
+      }
     }
 
     return Promise.reject(error);

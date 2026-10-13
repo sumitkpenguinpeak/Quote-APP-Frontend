@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from '@shopify/polaris';
 import '@shopify/polaris/build/esm/styles.css';
 import en from '@shopify/polaris/locales/en.json';
@@ -10,36 +10,36 @@ import Dashboard from './pages/Dashboard';
 import Billing from './pages/Billing';
 import QuoteList from './pages/QuoteList';
 import QuoteDetail from './pages/QuoteDetail';
-import ProductSetting from './pages/ProductSetting';
 import Setting from './pages/Setting';
 import AppBridgeNavMenu from './components/AppBridgeNavMenu';
+import RequireEmbed from './components/RequireEmbed';
+import SupportChat from './components/SupportChat';
+import { AppEmbedProvider } from './context/AppEmbedContext';
 
-/**
- * App
- *
- * Top-level router. Every route (other than /login) expects a `shop`
- * query parameter, which is preserved by AppLayout's navigation links.
- *
- * AppBridgeNavMenu is mounted once here (inside BrowserRouter, since it
- * needs useNavigate) - it renders nothing visible itself, but registers
- * this app's navigation into Shopify admin's own left sidebar.
- */
+// App embed on na thay tyare sudhi aa pages lock rahe chhe.
+// Billing ne lock na karvu hoy to ahiya thi `guard(...)` kadhi nakho.
+const guard = (page) => <RequireEmbed>{page}</RequireEmbed>;
+
 export default function App() {
   return (
     <AppProvider i18n={en}>
       <BrowserRouter>
-        <AppBridgeNavMenu />
-        <Routes>
-          <Route path="/" element={<Entry />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/quotelist" element={<QuoteList />} />
-          <Route path="/quotedetail/:id" element={<QuoteDetail />} />
-          <Route path="/billing" element={<Billing />} />
-          <Route path="/product-settings" element={<ProductSetting />} />
-          <Route path="/settings" element={<Setting />} />
-          <Route path="*" element={<Entry />} />
-        </Routes>
+        <AppEmbedProvider>
+          <AppBridgeNavMenu />
+          <Routes>
+            <Route path="/" element={<Entry />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/quotelist" element={guard(<QuoteList />)} />
+            <Route path="/quotedetail/:id" element={guard(<QuoteDetail />)} />
+            {/* Install pachhi pehli screen: plan select karya pachhi j Dashboard (RequireEmbed lock nathi) */}
+            <Route path="/pricing" element={<Billing onboarding />} />
+            <Route path="/billing" element={guard(<Billing />)} />
+            <Route path="/settings" element={guard(<Setting />)} />
+            <Route path="*" element={<Entry />} />
+          </Routes>
+          <SupportChat />
+        </AppEmbedProvider>
       </BrowserRouter>
     </AppProvider>
   );

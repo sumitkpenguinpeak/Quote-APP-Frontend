@@ -1,0 +1,21 @@
+<div class="pp-quote-page" style="max-width: 1100px; margin: 0 auto; padding: 24px 16px;">
+  <h1 class="pp-quote-page__title">{{ block.settings.heading }}</h1>
+  <div id="ppQuoe_widget"></div>
+</div>
+
+{% schema %}
+{
+  "name": "Quote Request Page",
+  "target": "section",
+  "javascript": "quote-app-embed.js",
+  "stylesheet": "quote-app-embed.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Request a Quote"
+    }
+  ]
+}
+{% endschema %}

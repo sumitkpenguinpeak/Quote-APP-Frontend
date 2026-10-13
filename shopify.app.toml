@@ -1,0 +1,20 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "675f553176d69d3d30fde74dc6891271"
+name = "Quote App"
+application_url = "https://saddlebag-document-filler.ngrok-free.dev"
+embedded = true
+
+[webhooks]
+api_version = "2026-07"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_products,write_products,read_orders,write_draft_orders,read_draft_orders,read_themes,write_themes,write_content"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://saddlebag-document-filler.ngrok-free.dev/api/auth/callback"
+]

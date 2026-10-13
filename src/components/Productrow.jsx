@@ -1,99 +1,172 @@
-import {Thumbnail,Text,TextField,BlockStack,InlineStack,Button,Box,Divider,} from '@shopify/polaris';
-import { formatMoney } from '../utils/date';
+import { InlineStack, BlockStack, Box, Text, TextField, Button } from "@shopify/polaris";
+import { DeleteIcon, MinusIcon, PlusIcon } from "@shopify/polaris-icons";
+import { formatMoney } from "../utils/date";
 
-export default function ProductRow({product, onQuantityChange, onPriceChange, onDelete}) {
-  const {id,image,name,sku,original_price: originalPrice,customer_requested_price: customerPrice,quantity} = product;
+// Keep this identical to the template used for the table header in QuoteDetail.jsx
+// so every column lines up regardless of screen width.
+// Keep this identical to PRODUCT_ROW_GRID in QuoteDetail.jsx so every column
+// lines up with the table header, regardless of screen width.
+const PRODUCT_ROW_GRID = "56px minmax(160px, 1fr) 110px 130px 130px 90px 36px";
 
-  const qty = Number(quantity) || 0;
-  const actualPrice = Number(originalPrice) || 0;
-  const quotedPrice = Number(customerPrice) || 0;
+export default function ProductRow({
+  product,
+  isEditable = true,
+  onQuantityChange,
+  onPriceChange,
+  onRemove,
+}) {
+  const quantity = Number(product.quantity) || 0;
+  const quotedPrice = Number(product.merchant_offered_price) || 0;
+  const originalPrice = Number(product.original_price) || 0;
+  const customerRequestedPrice = Number(product.customer_requested_price) || 0;
 
-  // Calculations
-  const actualTotal = qty * actualPrice;
-  const customerTotal = qty * quotedPrice;
-  const hasDiscount = actualPrice > quotedPrice;
+  const lineTotal = quantity * quotedPrice;
+  const actualLineTotal = quantity * originalPrice;
+  const requestedLineTotal = quantity * customerRequestedPrice;
 
   return (
-    <Box padding="400" borderRadius="200" background="bg-surface-secondary" borderColor="border-subdued" borderWidth="1" style={{ marginBottom: '12px',}}>
-       <Divider />
-     
-      <BlockStack gap="300">
-        {/* Product Header */}
-        <InlineStack gap="400" wrap={false} align="start">
-          <Box style={{ flexShrink: 0 }}><Thumbnail source={image || ''} alt={name} size="medium" /></Box>
-
-          <div style={{ flex: 1, minWidth: 0,}}>
-            <BlockStack gap="100">
-              <Text as="span" variant="bodyMd" fontWeight="semibold">{name}</Text>
-              <Text as="span" variant="bodySm" tone="subdued"><strong>SKU:</strong> {sku || '-'}</Text>
-            </BlockStack>
-          </div>
-
-          {/* Quantity */}
-          <div style={{ width: 100, minWidth: 100}}>
-            <TextField
-              label="Quantity"
-              labelHidden
-              type="number"
-              min={1}
-              value={String(quantity ?? 1)}
-              onChange={(value) =>onQuantityChange(id, value)}
-              autoComplete="off"
+    <BlockStack gap="0">
+      {/* Main row — fixed grid, never wraps. Card wraps this in an overflow-x:auto
+          container so very narrow screens scroll instead of breaking the layout. */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: PRODUCT_ROW_GRID,
+          columnGap: 16,
+          alignItems: "center",
+          minWidth: "fit-content",
+        }}
+      >
+        {/* Product image */}
+        <Box
+          width="56px"
+          minHeight="56px"
+          borderRadius="150"
+          overflowX="hidden"
+          overflowY="hidden"
+          background="bg-surface-secondary"
+        >
+          {product.image ? (
+            <img
+              src={product.image}
+              alt={product.name}
+              style={{ width: 56, height: 56, objectFit: "cover", display: "block" }}
             />
-          </div>
-        </InlineStack>
-
-        <Divider />
-
-        {/* Price Section */}
-        <InlineStack gap="300" wrap={false} align="start">
-          <div style={{ flex: 1 }}>
-            <TextField
-              label="Original Price"
-              value={String(actualPrice.toFixed(2))}
-              prefix="$"
-              readOnly
-              autoComplete="off"
-              helpText="Actual product price"
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <TextField
-            label="Quoted Price"
-            type="number"
-            prefix="$"
-            value={String(quotedPrice)}
-            onChange={(value) => onPriceChange(id, value)}
-            autoComplete="off" helpText="Customer requested price"
-          />
-          </div>
-        </InlineStack>
-
-        {/* Calculation Section */}
-        <Box padding="300" background="bg-surface" borderRadius="150">
-          <InlineStack align="space-between" gap="400" wrap={false}>
-            <BlockStack gap="100">
-              <Text as="span" variant="bodySm" tone="subdued">Actual Total</Text>
-              <Text as="span" variant="bodyMd" fontWeight="semibold">{qty} × {formatMoney((actualPrice * 100), '${{amount}}')}</Text>
-              <Text as="span" variant="bodyMd" >{formatMoney((actualTotal * 100), '${{amount}}')}</Text>
-            </BlockStack>
-
-            {/* Customer Total */}
-            <BlockStack gap="100">
-              <Text as="span" variant="bodySm" tone="subdued">Customer Total</Text>
-              <Text as="span" variant="bodyMd" fontWeight="semibold">{qty} ×  {formatMoney((quotedPrice * 100), '${{amount}}')}</Text>
-              <Text as="span" variant="bodyMd" > {formatMoney((customerTotal * 100), '${{amount}}')}</Text>
-            </BlockStack>
-
-            {/* Quoted Total */}
-            <BlockStack gap="100">
-              <Text as="span" variant="bodySm" tone="subdued">Quoted Total</Text>
-              <Text as="span" variant="bodyMd" fontWeight="semibold" tone={hasDiscount ? 'success' : undefined}>{qty} × {formatMoney((quotedPrice*100),'${{amount}}')}</Text>
-              <Text as="span" variant="headingSm" tone={hasDiscount ? 'success' : undefined}>{formatMoney((customerTotal*100),'${{amount}}')}</Text>
-            </BlockStack>
-          </InlineStack>
+          ) : null}
         </Box>
-      </BlockStack>
-    </Box>
+
+        {/* Name + SKU */}
+        <BlockStack gap="0">
+          <Text as="span" variant="bodyMd" fontWeight="semibold">
+            {product.name}
+          </Text>
+          <Text as="span" variant="bodySm" tone="subdued">
+            SKU: {product.sku || "-"}
+          </Text>
+        </BlockStack>
+
+        {/* Original price — read only */}
+        <Box
+          padding="200"
+          background="bg-surface-secondary"
+          borderRadius="150"
+          borderWidth="025"
+          borderColor="border"
+        >
+          <Text as="span" variant="bodyMd" tone="subdued">
+            $ {originalPrice.toFixed(2)}
+          </Text>
+        </Box>
+
+        {/* Quoted price — editable */}
+        <TextField
+          label="Quoted price"
+          labelHidden
+          type="number"
+          prefix="$"
+          value={String(quotedPrice)}
+          onChange={(value) => onPriceChange?.(product.id, value)}
+          disabled={!isEditable}
+          autoComplete="off"
+        />
+
+        {/* Quantity stepper */}
+        <InlineStack gap="0" blockAlign="center" wrap={false}>
+          <Button
+            icon={MinusIcon}
+            accessibilityLabel="Decrease quantity"
+            onClick={() => onQuantityChange?.(product.id, Math.max(quantity - 1, 0))}
+            disabled={!isEditable || quantity <= 0}
+          />
+          <Box width="40px">
+            <Text as="span" variant="bodyMd" alignment="center">
+              {quantity}
+            </Text>
+          </Box>
+          <Button
+            icon={PlusIcon}
+            accessibilityLabel="Increase quantity"
+            onClick={() => onQuantityChange?.(product.id, quantity + 1)}
+            disabled={!isEditable}
+          />
+        </InlineStack>
+
+        {/* Line total */}
+        <Text as="span" variant="bodyMd" fontWeight="semibold">
+          {formatMoney(lineTotal * 100, "${{amount}}")}
+        </Text>
+
+        {/* Remove row */}
+        <Button
+          icon={DeleteIcon}
+          variant="tertiary"
+          tone="critical"
+          accessibilityLabel={`Remove ${product.name}`}
+          onClick={() => onRemove?.(product.id)}
+          disabled={!isEditable}
+        />
+      </div>
+
+      {/* Breakdown detail panel */}
+      <Box padding="300" background="bg-surface-secondary" borderRadius="150" marginBlockStart="200">
+        <InlineStack gap="600" wrap={false}>
+          <BlockStack gap="050">
+            <Text as="span" variant="bodySm" tone="subdued">
+              Actual product price
+            </Text>
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {quantity} × {formatMoney(originalPrice * 100, "${{amount}}")}
+            </Text>
+            <Text as="span" variant="bodySm" tone="subdued">
+              {formatMoney(actualLineTotal * 100, "${{amount}}")}
+            </Text>
+          </BlockStack>
+
+          <BlockStack gap="050">
+            <Text as="span" variant="bodySm" tone="subdued">
+              Customer requested price
+            </Text>
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {quantity} × {formatMoney(customerRequestedPrice * 100, "${{amount}}")}
+            </Text>
+            <Text as="span" variant="bodySm" tone="subdued">
+              {formatMoney(requestedLineTotal * 100, "${{amount}}")}
+            </Text>
+          </BlockStack>
+
+          <BlockStack gap="050">
+            <Text as="span" variant="bodySm" tone="subdued">
+              Quoted total
+            </Text>
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {quantity} × {formatMoney(quotedPrice * 100, "${{amount}}")}
+            </Text>
+            <Text as="span" variant="bodyMd" fontWeight="semibold">
+              {formatMoney(lineTotal * 100, "${{amount}}")}
+            </Text>
+          </BlockStack>
+        </InlineStack>
+      </Box>
+    </BlockStack>
   );
 }

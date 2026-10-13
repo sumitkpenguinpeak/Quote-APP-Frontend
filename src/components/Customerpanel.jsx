@@ -1,132 +1,176 @@
-import { useState } from 'react';
-import {Card,Text,TextField,BlockStack,InlineStack,Collapsible,Button,Thumbnail,Divider,Box,} from '@shopify/polaris';
-import { ChevronDownIcon, ChevronUpIcon } from '@shopify/polaris-icons';
+import { useState } from "react";
+import {
+  Card,
+  BlockStack,
+  InlineStack,
+  Text,
+  TextField,
+  Button,
+  Box,
+  Icon,
+} from "@shopify/polaris";
+import { ChevronUpIcon, ChevronDownIcon, CalendarIcon, XCircleIcon } from "@shopify/polaris-icons";
+
+function getInitials(name) {
+  if (!name) return "?";
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
 
 function CollapsibleSection({ title, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
-
   return (
-    <BlockStack gap="200">
-      <Button variant="plain" textAlign="left" fullWidth onClick={() => setOpen((prev) => !prev)}
-        icon={open ? ChevronUpIcon : ChevronDownIcon}>
-        <Text variant="bodyMd" fontWeight="semibold">{title}</Text>
-      </Button>
-      <Collapsible open={open} id={`section-${title}`}>
-        <Box paddingBlockStart="200">{children}</Box>
-      </Collapsible>
-    </BlockStack>
+    <Card>
+      <BlockStack gap="400">
+        <InlineStack align="space-between" blockAlign="center">
+          <Text as="h2" variant="headingSm">
+            {title}
+          </Text>
+          <Button
+            variant="tertiary"
+            icon={open ? ChevronUpIcon : ChevronDownIcon}
+            accessibilityLabel={open ? `Collapse ${title}` : `Expand ${title}`}
+            onClick={() => setOpen((v) => !v)}
+          />
+        </InlineStack>
+        {open && children}
+      </BlockStack>
+    </Card>
   );
 }
 
-export default function CustomerPanel({ quote, message, onMessageChange, dueDate, onDueDateChange }) {
-  const customer = quote?.customer || {};
-  const shipping = customer.shipping_address || {};
- const note = quote?.customer_note || '';
-  const alsoViewed = quote?.also_viewed || [];
-  const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(' ');
+export default function CustomerPanel({
+  quote,
+  message,
+  onMessageChange,
+  dueDate,
+  onDueDateChange,
+  onEditCustomer,
+  isEditable = true,
+}) {
+  const customerName = quote?.customer_name || "Unknown customer";
+  const customerEmail = quote?.customer_email || "";
+  const customerPhone = quote?.customer_phone || "";
+  // The customer's own note captured at submission time — read-only here.
+  const customerSiteNote = quote?.customer_note || "";
+
+  const [email, setEmail] = useState(customerEmail);
+  const [phone, setPhone] = useState(customerPhone);
 
   return (
     <BlockStack gap="400">
+      {/* Customer summary */}
       <Card>
         <BlockStack gap="400">
-          <Box><Text as="h2" variant="headingMd">Customer</Text></Box>
-          <Box paddingBlock="300" paddingInline="300" background="bg-surface-secondary" borderRadius="150" >
-            <TextField
-              label="Email address"
-              labelHidden
-              value={customer.email || ''}
-              placeholder="Email address"
-              disabled
-              autoComplete="off"
-            />
-          </Box>
+          <InlineStack align="space-between" blockAlign="center">
+            <Text as="h2" variant="headingMd">
+              Customer
+            </Text>
+            <Button variant="tertiary" onClick={onEditCustomer}>
+              Edit
+            </Button>
+          </InlineStack>
 
-          <Divider />
-
-          <CollapsibleSection title="Customer Information">
-            <BlockStack gap="200">
-              <Box paddingBlock="200" paddingInline="200" background="bg-surface-tertiary" borderRadius="100">
-                <BlockStack gap="100">
-                  <Text as="p" variant="bodyMd" fontWeight="semibold">{fullName || '-'}</Text>
-                  <Text as="p" variant="bodySm" tone="subdued">{customer.email || '-'}</Text>
-                  <Text as="p" variant="bodySm" tone="subdued">{customer.phone || '-'}</Text>
-                </BlockStack>
-              </Box>
-
-              {shipping.address1 && (
-                <Box paddingBlock="200" paddingInline="200" background="bg-surface-tertiary" borderRadius="100">
-                  <BlockStack gap="100">
-                    <Text as="p" variant="bodySm" fontWeight="semibold">Shipping address</Text>
-                    <Text as="p" variant="bodySm">
-                      {[shipping.company, shipping.address1, shipping.city, shipping.province, shipping.zip, shipping.country]
-                        .filter(Boolean)
-                        .join(', ')}
-                    </Text>
-                  </BlockStack>
+          <InlineStack gap="300" blockAlign="center" wrap={false}>
+            <Box
+              minWidth="48px"
+              minHeight="48px"
+              borderRadius="full"
+              background="bg-fill-success-secondary"
+            >
+              <InlineStack align="center" blockAlign="center">
+                <Box paddingBlock="150">
+                  <Text as="span" variant="bodyMd" fontWeight="semibold">
+                    {getInitials(customerName)}
+                  </Text>
                 </Box>
+              </InlineStack>
+            </Box>
+            <BlockStack gap="0">
+              <Text as="span" variant="bodyMd" fontWeight="semibold">
+                {customerName}
+              </Text>
+              {customerEmail && (
+                <Text as="span" variant="bodySm" tone="subdued">
+                  {customerEmail}
+                </Text>
+              )}
+              {customerPhone && (
+                <Text as="span" variant="bodySm" tone="subdued">
+                  {customerPhone}
+                </Text>
               )}
             </BlockStack>
-          </CollapsibleSection>
-
-          <Divider />
-
-          <CollapsibleSection title="Customer note">
-            <BlockStack gap="200">
-               <Text as="p" variant="bodyMd"><Text as="span" fontWeight="semibold">Site:</Text>{note.site || '-'}</Text>
-              {note && (
-                <Box paddingBlock="200" paddingInline="200" background="bg-surface-tertiary" borderRadius="100" borderColor="border" borderWidth="1">
-                  <Text as="p" variant="bodySm">{note}</Text>
-                </Box>
-              )}
-              {!note && ( <Text as="p" variant="bodySm" tone="subdued">No customer notes</Text>)}
-            </BlockStack>
-          </CollapsibleSection>
-
-          <Box paddingBlockStart="200">
-            <TextField
-              label="Message"
-              multiline={4}
-              value={message}
-              onChange={onMessageChange}
-              placeholder="The quote's special note"
-              autoComplete="off"
-            />
-          </Box>
-
-          <TextField
-            label="Due date"
-            type="date"
-            value={dueDate} 
-            onChange={onDueDateChange}
-            autoComplete="off"
-          />
+          </InlineStack>
         </BlockStack>
       </Card>
 
-      {alsoViewed.length > 0 && (
-        <Card>
-          <BlockStack gap="400">
-            <Box><Text as="h2" variant="headingMd">This customer also viewed</Text></Box>
+      {/* Editable contact info */}
+      <CollapsibleSection title="Customer Information">
+        <BlockStack gap="300">
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            disabled={!isEditable}
+            autoComplete="off"
+          />
+          <TextField
+            label="Phone number"
+            type="tel"
+            value={phone}
+            onChange={setPhone}
+            disabled={!isEditable}
+            autoComplete="off"
+          />
+        </BlockStack>
+      </CollapsibleSection>
 
-            <BlockStack gap="300">
-              {alsoViewed.map((item) => (
-                <Box 
-                  key={item.id}
-                  paddingBlock="200" paddingInline="200" background="bg-surface-secondary" borderRadius="150">
-                  <InlineStack gap="300" wrap={false} blockAlign="start">
-                    <Thumbnail source={item.image || ''} alt={item.name} size="small" />
-                    <BlockStack gap="050">
-                      <Text as="span" variant="bodyMd" fontWeight="medium">{item.name}</Text>
-                      <Text as="span" variant="bodySm" tone="subdued">Viewed at {item.viewed_at || '-'}</Text>
-                      <Text as="span" variant="bodySm" tone="subdued">Visit times: {item.visit_count ?? 0}</Text>
-                    </BlockStack>
-                  </InlineStack>
-                </Box>
-              ))}
-            </BlockStack>
-          </BlockStack>
-        </Card>
-      )}
+      {/* Notes */}
+      <CollapsibleSection title="Customer note">
+        <BlockStack gap="300">
+          <TextField
+            label="Site"
+            value={customerSiteNote}
+            disabled
+            autoComplete="off"
+          />
+          <TextField
+            label="Message"
+            value={message}
+            onChange={onMessageChange}
+            multiline={4}
+            placeholder="The quote's special note"
+            disabled={!isEditable}
+            autoComplete="off"
+          />
+          <TextField
+            label="Due date"
+            type="date"
+            value={dueDate}
+            onChange={onDueDateChange}
+            disabled={!isEditable}
+            autoComplete="off"
+            prefix={<Icon source={CalendarIcon} tone="subdued" />}
+            connectedRight={
+              dueDate ? (
+                <Button
+                  variant="tertiary"
+                  icon={XCircleIcon}
+                  accessibilityLabel="Clear due date"
+                  onClick={() => onDueDateChange?.("")}
+                  disabled={!isEditable}
+                />
+              ) : null
+            }
+          />
+        </BlockStack>
+      </CollapsibleSection>
     </BlockStack>
   );
 }

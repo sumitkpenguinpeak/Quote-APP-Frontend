@@ -1,57 +1,19 @@
-import React, { useState } from 'react';
-import { Page, Card, TextField, Button, FormLayout, Banner, Text, BlockStack } from '@shopify/polaris';
-import { buildInstallUrl, isValidShopDomain } from '../utils/shopify';
+import React from 'react';
+import { Page, Card, Banner, Text, BlockStack } from '@shopify/polaris';
 
 /**
- * Login
- *
- * Entry point for merchants who are not yet inside the embedded admin
- * (e.g. installing from the App Store listing, or testing locally).
- * Collects the shop domain and redirects to the backend's /api/install
- * route, which kicks off the OAuth flow.
+ * Shown only when the app is opened outside the Shopify admin (no signed launch params).
+ * Merchants install from the Shopify App Store / admin - the shop domain is never typed in here.
  */
 export default function Login() {
-  const [shop, setShop] = useState('');
-  const [error, setError] = useState('');
-
-  const handleInstall = () => {
-    const trimmedShop = shop.trim().toLowerCase();
-
-    if (!isValidShopDomain(trimmedShop)) {
-      setError('Enter a valid shop domain, e.g. your-store.myshopify.com');
-      return;
-    }
-
-    setError('');
-    window.location.href = buildInstallUrl(trimmedShop);
-
-    localStorage.setItem('shopurl', trimmedShop);
-  };
-
   return (
-    <Page title="Install Review Pro App">
+    <Page title="Quote App">
       <Card>
         <BlockStack gap="400">
+          <Banner tone="info">Open this app from your Shopify admin to continue.</Banner>
           <Text as="p" variant="bodyMd">
-            Enter your Shopify store domain to install Review Pro App and start
-            collecting and displaying product reviews.
+            Install or open Quote App from the Shopify App Store, or from Apps in your Shopify admin.
           </Text>
-
-          {error && <Banner tone="critical">{error}</Banner>}
-
-          <FormLayout>
-            <TextField
-              label="Shop domain"
-              value={shop}
-              onChange={setShop}
-              autoComplete="off"
-              placeholder="your-store.myshopify.com"
-              helpText="You can find this in your Shopify admin URL."
-            />
-            <Button variant="primary" onClick={handleInstall}>
-              Install App
-            </Button>
-          </FormLayout>
         </BlockStack>
       </Card>
     </Page>

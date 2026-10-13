@@ -32,7 +32,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-
       // Shopify webhooks, if your Laravel routes use /webhooks
       '/webhooks': {
         target: 'http://127.0.0.1:8000',
