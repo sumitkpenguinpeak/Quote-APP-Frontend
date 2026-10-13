@@ -1,20 +1,20 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "675f553176d69d3d30fde74dc6891271"
-name = "Quote App"
-application_url = "https://saddlebag-document-filler.ngrok-free.dev"
+client_id = "bee63de9ffbfe9032074396303487e28"
+name = "PP Quick Quote"
+application_url = "https://quote-app-frontend-git-main-sk-9093.vercel.app"
 embedded = true
 
 [webhooks]
-api_version = "2026-07"
+api_version = "2026-10"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products,read_orders,write_draft_orders,read_draft_orders,read_themes,write_themes,write_content"
+scopes = "read_draft_orders,read_orders,read_products,read_themes,write_content,write_draft_orders,write_products,write_themes"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://saddlebag-document-filler.ngrok-free.dev/api/auth/callback"
+  "https://phplaravel-1446948-6722720.cloudwaysapps.com/api/auth/callback"
 ]
