@@ -40,7 +40,7 @@ export default function Install() {
   const onInstall = () => {
     const shop = normalizeShop(value);
     if (!shop) {
-      setError('Valid Shopify store URL nakho, jem ke your-store.myshopify.com');
+      setError('Enter a valid Shopify store URL, such as your-store.myshopify.com');
       return;
     }
     setError('');
@@ -52,7 +52,7 @@ export default function Install() {
       <Card>
         <BlockStack gap="400">
           <Text as="p" variant="bodyMd">
-            Tamari Shopify store no URL nakho ane Install par click karo. Tame Shopify ni approval screen par jasho.
+            Enter your Shopify store URL and click Install. You will be redirected to Shopify’s approval screen.
           </Text>
 
           <TextField
@@ -68,7 +68,7 @@ export default function Install() {
             onKeyDown={(e) => {
               if (e.key === 'Enter') onInstall();
             }}
-            helpText="Jem ke my-store.myshopify.com (ke fakt my-store)"
+            helpText="For example, my-store.myshopify.com (or just my-store)"
           />
 
           <Button variant="primary" onClick={onInstall} disabled={!value.trim()}>
@@ -76,7 +76,7 @@ export default function Install() {
           </Button>
 
           <Banner tone="info">
-            Store URL Shopify admin ma Settings → Domains ma ke browser ni URL ma <b>admin.shopify.com/store/&lt;naam&gt;</b> tarike dekhay chhe.
+            You can find your store URL in Shopify Admin → Settings → Domains or in your browser’s address bar as admin.shopify.com/store/<name>.
           </Banner>
         </BlockStack>
       </Card>
