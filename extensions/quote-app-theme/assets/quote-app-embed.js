@@ -825,8 +825,11 @@
         const contactForm = document.querySelector('#quote--contact');
         if (contactForm) {
             const persist = debounce(persistContactForm, 300);
-            contactForm.addEventListener('input', function () { persist(); showQuoteFormError(''); });
-            contactForm.addEventListener('change', persist);
+            contactForm.addEventListener('input', function (e) { persist(); showQuoteFormError(''); maybeReloadShipping(e); });
+            contactForm.addEventListener('change', function (e) { persist(); maybeReloadShipping(e); });
+            // re-render pachhi pehla na rates fari batavo, ane prefilled address hoy to rates lavo
+            renderShippingRates();
+            setTimeout(scheduleShippingRates, 1500);
         }
 
         /* ---- country -> state ---- */
@@ -939,6 +942,132 @@
         };
     }
 
+    /* =====================================================================
+     * SHIPPING METHOD (Shopify shipping rates, customer na address par aadharit)
+     * Optional: customer rate select na kare to merchant pachhi quote ma shipping nakhe chhe.
+     * ===================================================================== */
+    let ppShipState = { handle: '', rates: [], reason: 'need_address', loading: false, key: '' };
+    let ppShipReq = 0;
+
+    function ppMoney(amount, currency) {
+        try {
+            return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(amount);
+        } catch (e) {
+            return (currency || '') + ' ' + Number(amount).toFixed(2);
+        }
+    }
+
+    function ppAddressForRates() {
+        const form = document.querySelector('#quote--contact');
+        if (!form) return null;
+        const el = function (n) { return form.querySelector('[name="' + n + '"]'); };
+        const text = function (n) {
+            const e = el(n);
+            if (!e || !e.value) return '';
+            const o = e.options && e.options[e.selectedIndex];
+            return o ? o.text : e.value;
+        };
+        const val = function (n) { const e = el(n); return e ? String(e.value || '').trim() : ''; };
+        const code = function (v, max) {
+            v = String(v || '').trim();
+            return v && v.length <= max && /^[A-Za-z0-9-]+$/.test(v) ? v.toUpperCase() : '';
+        };
+        const c = countries.find(function (x) { return String(x.id) === val('country'); }) || {};
+        const st = states.find(function (x) { return String(x.id) === val('state'); }) || {};
+        return {
+            country: text('country'),
+            country_code: code(c.iso2 || c.iso_code, 2),
+            state: text('state'),
+            state_code: code(st.state_code || st.iso2, 3),
+            city: text('city'),
+            zip: val('postal_code'),
+            address: val('address')
+        };
+    }
+
+    function renderShippingRates() {
+        const wrap = document.getElementById('ppShippingMethod');
+        const box = document.getElementById('ppShippingRates');
+        if (!wrap || !box) return;
+        const st = ppShipState;
+
+        if (st.reason === 'need_address' && !st.loading) {
+            wrap.style.display = 'none';
+            box.innerHTML = '';
+            return;
+        }
+        wrap.style.display = '';
+
+        if (st.loading) {
+            box.innerHTML = '<p class="pp-ship-note">Loading shipping options...</p>';
+            return;
+        }
+        if (!st.rates.length) {
+            box.innerHTML = '<p class="pp-ship-note">No shipping options found for this address. The store will confirm shipping with your quote.</p>';
+            return;
+        }
+
+        let h = '<div class="pp-ship-list" role="radiogroup">';
+        st.rates.forEach(function (r, i) {
+            const id = 'ppShipRate' + i;
+            h += '<label class="pp-ship-option" for="' + id + '">';
+            h += '<input type="radio" id="' + id + '" name="shipping_rate" value="' + esc(r.handle) + '"' + (r.handle === st.handle ? ' checked' : '') + '>';
+            h += '<span class="pp-ship-title">' + esc(r.title) + '</span>';
+            h += '<span class="pp-ship-price">' + esc(r.price > 0 ? ppMoney(r.price, r.currency) : 'Free') + '</span>';
+            h += '</label>';
+        });
+        h += '</div>';
+        h += '<p class="pp-ship-note">Estimated shipping. Final shipping is confirmed in your quote.</p>';
+        box.innerHTML = h;
+        box.querySelectorAll('input[name="shipping_rate"]').forEach(function (input) {
+            input.addEventListener('change', function () { ppShipState.handle = this.value; });
+        });
+    }
+
+    async function loadShippingRates() {
+        if (!document.getElementById('ppShippingMethod')) return;
+        const addr = ppAddressForRates();
+        const items = (QuoteLineItem || [])
+            .filter(function (i) { return i.shopify_variant_id; })
+            .map(function (i) {
+                return { shopify_variant_id: String(i.shopify_variant_id), quantity: Math.max(1, parseInt(i.quantity, 10) || 1) };
+            });
+
+        if (!addr || !addr.country || !addr.zip || !items.length) {
+            ppShipReq++;
+            ppShipState = { handle: '', rates: [], reason: 'need_address', loading: false, key: '' };
+            renderShippingRates();
+            return;
+        }
+
+        const key = JSON.stringify([addr, items]);
+        if (key === ppShipState.key && !ppShipState.loading) { renderShippingRates(); return; }
+
+        const req = ++ppShipReq;
+        ppShipState = { handle: ppShipState.handle, rates: [], reason: null, loading: true, key: key };
+        renderShippingRates();
+
+        try {
+            const res = await PPQuoteAPIcallFack('/shipping-rates', 'POST', QuoteJsonstringify({ items: items, address: addr }));
+            if (req !== ppShipReq) return; // navo request aavi gayo
+            const ok = res && res.success === true && res.data;
+            const rates = ok && Array.isArray(res.data.rates) ? res.data.rates : [];
+            const keep = rates.some(function (r) { return r.handle === ppShipState.handle; }) ? ppShipState.handle : '';
+            ppShipState = { handle: keep, rates: rates, reason: ok ? (res.data.reason || null) : 'error', loading: false, key: key };
+        } catch (e) {
+            if (req !== ppShipReq) return;
+            ppShipState = { handle: '', rates: [], reason: 'error', loading: false, key: '' };
+        }
+        renderShippingRates();
+    }
+
+    const scheduleShippingRates = debounce(loadShippingRates, 700);
+
+    function maybeReloadShipping(e) {
+        const name = e && e.target && e.target.name;
+        if (['country', 'state', 'city', 'postal_code', 'address'].indexOf(name) !== -1) scheduleShippingRates();
+    }
+
     function persistContactForm() {
         const f = readContactForm();
         if (!f || !getQuoteLocalData) return;
@@ -1032,8 +1161,11 @@
                     state: c.state || null,
                     country: c.country || null,
                     zip: c.zip || null,
+                    country_code: (ppAddressForRates() || {}).country_code || null,
+                    state_code: (ppAddressForRates() || {}).state_code || null,
                     shopify_customer_id: getShopifyCustomerId()
                 },
+                shipping: ppShipState.handle ? { handle: ppShipState.handle } : null,
                 items: store.items.map(function (i) {
                     return {
                         shopify_product_id: String(i.shopify_product_id),
@@ -1319,6 +1451,12 @@
         h += '</div>';
 
         h += '</div>';
+        h += '</div>';
+
+        /* shipping method (Shopify rates; address bharya pachhi j dekhay chhe) */
+        h += '<div class="form-accordion" id="ppShippingMethod" style="display:none">';
+        h += '<button type="button" class="accordion-header" aria-expanded="true"><span>Shipping method</span>' + chevronUp + '</button>';
+        h += '<div class="accordion-content"><div id="ppShippingRates"></div></div>';
         h += '</div>';
 
         /* note */
