@@ -24,7 +24,5 @@ dist-ssr
 *.sw?
 
 # secrets / local state
-.env
-.env.*
 !.env.example
 .shopify/

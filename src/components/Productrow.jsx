@@ -1,6 +1,7 @@
 import { InlineStack, BlockStack, Box, Text, TextField, Button } from "@shopify/polaris";
 import { DeleteIcon, MinusIcon, PlusIcon } from "@shopify/polaris-icons";
 import { formatMoney } from "../utils/date";
+import { currencySymbol } from "../utils/currency";
 
 // Keep this identical to the template used for the table header in QuoteDetail.jsx
 // so every column lines up regardless of screen width.
@@ -14,6 +15,7 @@ export default function ProductRow({
   onQuantityChange,
   onPriceChange,
   onRemove,
+  currency = "USD",
 }) {
   const quantity = Number(product.quantity) || 0;
   const quotedPrice = Number(product.merchant_offered_price) || 0;
@@ -74,7 +76,7 @@ export default function ProductRow({
           borderColor="border"
         >
           <Text as="span" variant="bodyMd" tone="subdued">
-            $ {originalPrice.toFixed(2)}
+            {currencySymbol(currency)} {originalPrice.toFixed(2)}
           </Text>
         </Box>
 
@@ -83,7 +85,7 @@ export default function ProductRow({
           label="Quoted price"
           labelHidden
           type="number"
-          prefix="$"
+          prefix={currencySymbol(currency)}
           value={String(quotedPrice)}
           onChange={(value) => onPriceChange?.(product.id, value)}
           disabled={!isEditable}

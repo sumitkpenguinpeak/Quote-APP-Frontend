@@ -25,8 +25,22 @@
     /* =====================================================================
      * CONFIG
      * ===================================================================== */
-    const QuoteAuthUrl = window.PPQuoteApiUrl || '/apps/quote-app';
-    const MONEY_FORMAT = window.PPQuoteMoneyFormat || '${{amount}}';
+    // App proxy path: dev app = /apps/quote-app, live app = /apps/quote-app (shopify.app.toml > [app_proxy] subpath).
+    // Path khotho hoy to Shopify 404 (HTML) aape chhe -> bijo path automatically try thay, jethi buttons gayab na thay.
+    const QUOTE_PROXY_CANDIDATES = window.PPQuoteApiUrl ? [window.PPQuoteApiUrl] : ['/apps/quote-app', '/apps/quote-app'];
+    let quoteProxyIndex = 0;
+    function defaultMoneyFormat() {
+        try {
+            const cur = window.Shopify && window.Shopify.currency && window.Shopify.currency.active;
+            if (cur) {
+                const part = new Intl.NumberFormat('en', { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol' })
+                    .formatToParts(1).find(function (x) { return x.type === 'currency'; });
+                if (part && part.value) return part.value + '{{amount}}';
+            }
+        } catch (e) { /* ignore */ }
+        return '${{amount}}';
+    }
+    const MONEY_FORMAT = window.PPQuoteMoneyFormat || defaultMoneyFormat();
     const STORAGE_KEY = 'ppQuoe__row';
     const SETTINGS_CACHE_KEY = 'ppQuoe__settings';
     const SETTINGS_CACHE_MS = 2 * 60 * 1000; // 2 min
@@ -263,23 +277,32 @@
     const PPQuoteAPIcallFack = async function (PATH, METHOD, DATA) {
         DATA = DATA || '';
         const headers = {
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
         };
-        let url = QuoteAuthUrl + PATH;
         const opts = { method: METHOD, headers: headers };
+        let query = '';
 
         if (METHOD === 'GET') {
-            const qs = new URLSearchParams(DATA ? JSON.parse(DATA) : {}).toString();
-            if (qs) url += '?' + qs;
+            query = new URLSearchParams(DATA ? JSON.parse(DATA) : {}).toString();
+            if (query) query = '?' + query;
         } else {
             headers['Content-Type'] = 'application/json';
             opts.body = DATA;
         }
 
-        const response = await fetch(url, opts);
         let res = {};
-        try { res = await response.json(); } catch (e) { res = {}; }
-        if (res && typeof res === 'object') res._status = response.status;
+        // Chalu path thi shuru karo; proxy path na male (404 + JSON nahi) to next candidate
+        for (let n = 0; n < QUOTE_PROXY_CANDIDATES.length; n++) {
+            const idx = (quoteProxyIndex + n) % QUOTE_PROXY_CANDIDATES.length;
+            const response = await fetch(QUOTE_PROXY_CANDIDATES[idx] + PATH + query, opts);
+            let parsed = null;
+            try { parsed = await response.json(); } catch (e) { parsed = null; }
+            res = parsed || {};
+            if (res && typeof res === 'object') res._status = response.status;
+            const proxyMissing = response.status === 404 && parsed === null;
+            if (!proxyMissing) { quoteProxyIndex = idx; break; }
+        }
         return res;
     };
 
@@ -361,7 +384,7 @@
             return;
         }
         try {
-            const Response = await PPQuoteAPIcallFack('/collections', 'GET', QuoteJsonstringify({ shop: PPshop }));
+            const Response = await PPQuoteAPIcallFack('/collections', 'GET'); // shop Shopify proxy pote signed query ma mokle chhe, etle client thi nahi
             CollectionObj = Response && Response.data ? Response.data : null;
             if (!CollectionObj) return; // API down -> kai nahi badalvanu
             const raw = CollectionObj.settings || {};
@@ -770,6 +793,7 @@
                 row.querySelector('.product-total').textContent = formatMoney(item.original_price * qty);
                 writeStore(getQuoteLocalData);
                 QuotePriceClac();
+                scheduleShippingRates(); // qty badlay to shipping rates fari lavo
             });
         });
 
@@ -985,7 +1009,7 @@
         };
     }
 
-    function renderShippingRates() {
+    function renderShippingRatesInner() {
         const wrap = document.getElementById('ppShippingMethod');
         const box = document.getElementById('ppShippingRates');
         if (!wrap || !box) return;
@@ -1020,8 +1044,13 @@
         h += '<p class="pp-ship-note">Estimated shipping. Final shipping is confirmed in your quote.</p>';
         box.innerHTML = h;
         box.querySelectorAll('input[name="shipping_rate"]').forEach(function (input) {
-            input.addEventListener('change', function () { ppShipState.handle = this.value; });
+            input.addEventListener('change', function () { ppShipState.handle = this.value; refreshTotals(); });
         });
+    }
+
+    function renderShippingRates() {
+        renderShippingRatesInner();
+        refreshTotals(); // select / badlay tyare niche Shipping + Total update
     }
 
     async function loadShippingRates() {
@@ -1052,8 +1081,11 @@
             if (req !== ppShipReq) return; // navo request aavi gayo
             const ok = res && res.success === true && res.data;
             const rates = ok && Array.isArray(res.data.rates) ? res.data.rates : [];
-            const keep = rates.some(function (r) { return r.handle === ppShipState.handle; }) ? ppShipState.handle : '';
-            ppShipState = { handle: keep, rates: rates, reason: ok ? (res.data.reason || null) : 'error', loading: false, key: key };
+            // Customer e pehla thi select karyo rate hoy ane haju available hoy to e j rakho, nahi to pelo rate by default select
+            const keep = rates.some(function (r) { return r.handle === ppShipState.handle; })
+                ? ppShipState.handle
+                : (rates.length ? rates[0].handle : '');
+            ppShipState = { handle: keep, rates: rates, reason: ok ? (res.data.reason || null) : 'error', loading: false, key: key, tax: ok ? (res.data.tax || null) : null };
         } catch (e) {
             if (req !== ppShipReq) return;
             ppShipState = { handle: '', rates: [], reason: 'error', loading: false, key: '' };
@@ -1245,17 +1277,32 @@
         });
     }
 
-    function QuotePriceClac() {
+    function selectedShippingRate() {
+        if (!ppShipState.handle) return null;
+        return ppShipState.rates.find(function (r) { return r.handle === ppShipState.handle; }) || null;
+    }
+
+    function calcTotals() {
         let subtotal = 0;
         QuoteLineItem.forEach(function (item) {
             subtotal += (parseInt(item.quantity, 10) || 0) * (Number(item.original_price) || 0);
         });
-        const sub = document.querySelector('.Quotesubtotal .amount');
-        const tot = document.querySelector('.total .amount');
-        if (sub) sub.textContent = formatMoney(subtotal);
-        if (tot) tot.textContent = formatMoney(subtotal);
-        const inner = document.querySelector('.totals-inner');
-        if (inner) inner.classList.remove('loader-total');
+        const rate = selectedShippingRate();
+        const shipping = rate ? (Number(rate.price) || 0) : 0;
+        // Shopify store tax (estimate) - address ane items par aadharit, shipping-rates response sathe aave chhe
+        const taxInfo = ppShipState && !ppShipState.loading ? ppShipState.tax : null;
+        const tax = taxInfo ? (Number(taxInfo.amount) || 0) : 0;
+        return { subtotal: subtotal, rate: rate, shipping: shipping, taxInfo: taxInfo, tax: tax, total: subtotal + shipping + tax };
+    }
+
+    function refreshTotals() {
+        const box = document.querySelector('.quote-wrapper .totals');
+        if (!box) return;
+        box.innerHTML = PPQuoteTotal();
+    }
+
+    function QuotePriceClac() {
+        refreshTotals();
     }
 
     /* ---------- HTML builders ---------- */
@@ -1483,19 +1530,29 @@
     }
 
     function PPQuoteTotal() {
-        let subtotal = 0;
-        QuoteLineItem.forEach(function (item) {
-            subtotal += (parseInt(item.quantity, 10) || 0) * (Number(item.original_price) || 0);
-        });
+        const t = calcTotals();
         let h = '<div class="totals-inner">';
-        if (subtotal !== 0) {
+        if (t.subtotal !== 0 || t.rate) {
             h += '<div class="total-row Quotesubtotal">';
             h += '<span>Subtotal</span>';
-            h += '<span class="amount">' + formatMoney(subtotal) + '</span>';
+            h += '<span class="amount">' + formatMoney(t.subtotal) + '</span>';
             h += '</div>';
+            if (t.rate) {
+                h += '<div class="total-row Quoteshipping">';
+                h += '<span>Shipping (' + esc(t.rate.title) + ')</span>';
+                h += '<span class="amount">' + (t.shipping > 0 ? formatMoney(t.shipping) : 'Free') + '</span>';
+                h += '</div>';
+            }
+            if (t.tax > 0) {
+                const taxLabel = [t.taxInfo.name, t.taxInfo.rate ? '(' + t.taxInfo.rate + '%)' : ''].filter(Boolean).join(' ');
+                h += '<div class="total-row Quotetax">';
+                h += '<span>Estimated tax' + (taxLabel ? ' (' + esc(taxLabel) + ')' : '') + '</span>';
+                h += '<span class="amount">' + formatMoney(t.tax) + '</span>';
+                h += '</div>';
+            }
             h += '<div class="total-row total">';
             h += '<span>Total</span>';
-            h += '<span class="amount">' + formatMoney(subtotal) + '</span>';
+            h += '<span class="amount">' + formatMoney(t.total) + '</span>';
             h += '</div>';
         }
         h += '</div>';

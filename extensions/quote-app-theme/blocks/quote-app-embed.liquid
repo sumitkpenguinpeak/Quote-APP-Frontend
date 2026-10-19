@@ -1,8 +1,14 @@
+{% comment %}
+  Quote App - App embed (loads the storefront script on every page).
+  Merchant enables it from Theme editor > App embeds.
+{% endcomment %}
+
 {% schema %}
 {
   "name": "Quote App",
   "target": "body",
   "javascript": "quote-app-embed.js",
   "stylesheet": "quote-app-embed.css",
+  "settings": []
 }
 {% endschema %}

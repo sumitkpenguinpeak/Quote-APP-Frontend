@@ -7,20 +7,15 @@ import {
 } from "@shopify/polaris";
 import { DeleteIcon, ChevronDownIcon, ChevronUpIcon, MenuHorizontalIcon, PlusCircleIcon, PlusIcon, SearchIcon } from "@shopify/polaris-icons";
 import api from "../services/api";
+import { currencySymbol, formatCurrency } from "../utils/currency";
 import AppBridgeSaveBar from "../components/AppBridgeSaveBar";
 import usePlan from "../hooks/usePlan";
 
 /* ---------------- helpers ---------------- */
 const getShop = () => new URLSearchParams(window.location.search).get("shop") || "";
-const getCurrency = (quote) => quote?.currency || "INR";
+const getCurrency = (quote) => quote?.currency || "USD";
 
-const money = (amount, currency = "INR") =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(amount) || 0);
+const money = (amount, currency = "USD") => formatCurrency(amount, currency);
 const fmtDate = (v) => {
   const d = new Date(v);
   return isNaN(d) ? "" : d.toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" });
@@ -95,6 +90,7 @@ function mapQuote(raw) {
     customerInfo,
     number: q.quote_number ?? q.quote_id ?? q.number ?? "",
     status: q.status ?? "",
+    currency: q.currency ?? null, // store ni currency (INR / USD ...), getCurrency(quote) aa j vape chhe
     draftOrderId: q.shopify_draft_order_id ?? null, // draft order ban gayo hoy to id aave
     createdAt,
     name,
@@ -186,7 +182,7 @@ function useDraft(open, value) {
 
 const numValue = (v) => (v ? String(v) : "");
 
-function DiscountModal({ open, value, onClose, onApply }) {
+function DiscountModal({ open, value, currency, onClose, onApply }) {
   const [d, setD] = useDraft(open, value);
   const set = (k) => (v) => setD((p) => ({ ...p, [k]: v }));
   const pct = d.type === "percentage";
@@ -204,7 +200,7 @@ function DiscountModal({ open, value, onClose, onApply }) {
             <Select label="Discount type" options={TYPE_OPTIONS} value={d.type} onChange={set("type")} />
             <TextField label="Discount value" type="number" min={0} autoComplete="off" placeholder="0.00"
               value={numValue(d.value)} onChange={set("value")}
-              prefix={pct ? undefined : "$"} suffix={pct ? "%" : undefined} />
+              prefix={pct ? undefined : currencySymbol(currency)} suffix={pct ? "%" : undefined} />
           </FormLayout.Group>
           <TextField label="Reason for discount" autoComplete="off" value={d.reason} onChange={set("reason")}
             helpText="This reason is visible to customers only for draft orders." />
@@ -303,7 +299,7 @@ function ShippingModal({ open, value, quoteId, currency, onClose, onApply }) {
           {!isShopify && (
             <Box paddingInlineStart="600">
               <BlockStack gap="300">
-                <TextField label="Shipping rate" type="number" min={0} prefix="$" autoComplete="off" placeholder="0.00"
+                <TextField label="Shipping rate" type="number" min={0} prefix={currencySymbol(currency)} autoComplete="off" placeholder="0.00"
                   value={numValue(s.rate)} onChange={set("rate")} />
                 <TextField label="Rate name" placeholder="Enter rate name" autoComplete="off" value={s.name} onChange={set("name")} />
               </BlockStack>
@@ -323,7 +319,7 @@ function ShippingModal({ open, value, quoteId, currency, onClose, onApply }) {
               <BlockStack gap="200">
                 {rates.map((r) => (
                   <RadioButton key={r.handle} id={`ship-rate-${r.handle}`} name="ship-rate"
-                    label={`${r.title} - ${money(r.price, currency || "INR")}`}
+                    label={`${r.title} - ${money(r.price, currency || "USD")}`}
                     checked={s.handle === r.handle} onChange={() => setS((p) => ({ ...p, handle: r.handle }))} />
                 ))}
               </BlockStack>
@@ -335,10 +331,39 @@ function ShippingModal({ open, value, quoteId, currency, onClose, onApply }) {
   );
 }
 
-function TaxModal({ open, value, onClose, onApply }) {
+function TaxModal({ open, value, quoteId, currency, onClose, onApply }) {
   const [x, setX] = useDraft(open, value);
   const set = (k) => (v) => setX((p) => ({ ...p, [k]: v }));
   const pct = x.type === "percentage";
+
+  // Popup khule tyare Shopify store ni tax settings (customer na address pramane) lavo
+  const [storeTax, setStoreTax] = useState(null); // { rate, name, reason }
+  const [loadingTax, setLoadingTax] = useState(false);
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    setLoadingTax(true);
+    setStoreTax(null);
+    api
+      .get(`/quotes/${encodeURIComponent(quoteId)}/store-tax`, { params: { shop: getShop() } })
+      .then((res) => { if (!cancelled) setStoreTax(res?.data?.data ?? null); })
+      .catch(() => { if (!cancelled) setStoreTax({ rate: null, name: null, reason: "request_failed" }); })
+      .finally(() => { if (!cancelled) setLoadingTax(false); });
+    return () => { cancelled = true; };
+  }, [open, quoteId]);
+
+  const TAX_REASON_TEXT = {
+    no_address: "Add the customer's shipping address (address and country) to load your Shopify store tax.",
+    no_items: "Add products to this quote to load your Shopify store tax.",
+    taxes_included: "Your Shopify store prices already include tax, so no extra tax is added.",
+    shopify_error: "Couldn't load your Shopify store tax. You can still add a custom tax.",
+    request_failed: "Couldn't load your Shopify store tax. You can still add a custom tax.",
+  };
+  const hasStoreTax = storeTax && storeTax.rate !== null && storeTax.rate !== undefined;
+
+  const useStoreTax = () =>
+    setX((p) => ({ ...p, type: "percentage", value: storeTax.rate, name: storeTax.name ?? p.name }));
+
   const apply = () => {
     const n = Math.max(0, Number(x.value) || 0);
     onApply({ ...x, value: pct ? Math.min(n, 100) : n });
@@ -349,11 +374,27 @@ function TaxModal({ open, value, onClose, onApply }) {
       secondaryActions={[{ content: "Cancel", onAction: onClose }]}>
       <Modal.Section>
         <FormLayout>
+          {loadingTax && <Spinner size="small" />}
+          {!loadingTax && hasStoreTax && (
+            <Banner tone="info">
+              <BlockStack gap="200">
+                <Text as="p">
+                  Shopify store tax for this customer: {storeTax.rate}%{storeTax.name ? ` (${storeTax.name})` : ""}
+                </Text>
+                <InlineStack>
+                  <Button onClick={useStoreTax}>Use Shopify store tax</Button>
+                </InlineStack>
+              </BlockStack>
+            </Banner>
+          )}
+          {!loadingTax && storeTax && !hasStoreTax && TAX_REASON_TEXT[storeTax.reason] && (
+            <Banner tone="warning">{TAX_REASON_TEXT[storeTax.reason]}</Banner>
+          )}
           <FormLayout.Group>
             <Select label="Tax type" options={TYPE_OPTIONS} value={x.type} onChange={set("type")} />
             <TextField label="Tax value" type="number" min={0} autoComplete="off" placeholder="0.00"
               value={numValue(x.value)} onChange={set("value")}
-              prefix={pct ? undefined : "$"} suffix={pct ? "%" : undefined} />
+              prefix={pct ? undefined : currencySymbol(currency)} suffix={pct ? "%" : undefined} />
           </FormLayout.Group>
           <TextField label="Tax name" placeholder="VAT" maxLength={15} showCharacterCount autoComplete="off"
             value={x.name} onChange={set("name")} />
@@ -364,7 +405,7 @@ function TaxModal({ open, value, onClose, onApply }) {
 }
 
 /* ---------------- Add custom item popup ---------------- */
-function CustomItemModal({ open, onClose, onAdd }) {
+function CustomItemModal({ open, currency, onClose, onAdd }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -399,7 +440,7 @@ function CustomItemModal({ open, onClose, onAdd }) {
           <TextField label="Item name" value={title} onChange={setTitle} autoComplete="off" requiredIndicator placeholder="e.g. Installation service" />
           <TextField label="Description (optional)" value={description} onChange={setDescription} multiline={3} autoComplete="off" placeholder="Add item details" />
           <FormLayout.Group>
-            <TextField label="Price" type="number" min={0} value={price} onChange={setPrice} prefix="$" autoComplete="off" placeholder="0.00" />
+            <TextField label="Price" type="number" min={0} value={price} onChange={setPrice} prefix={currencySymbol(currency)} autoComplete="off" placeholder="0.00" />
             <TextField label="Quantity" type="number" min={1} value={quantity} onChange={setQuantity} autoComplete="off" />
           </FormLayout.Group>
           <TextField label="SKU (optional)" value={sku} onChange={setSku} autoComplete="off" />
@@ -559,7 +600,7 @@ function ProductPickerModal({ open, onClose, onSelect , currency }) {
               <Thumb src={p.image} />
               <Text as="span">{productLabel(p)}</Text>
               <Text as="span" tone="subdued" alignment="end">{p.available == null ? "" : `${p.available} available`}</Text>
-              <Text as="span" alignment="end">{money(p.price, currency || "INR")}</Text>
+              <Text as="span" alignment="end">{money(p.price, currency || "USD")}</Text>
             </div>
           ))}
           {loading && products.length > 0 && (
@@ -572,7 +613,7 @@ function ProductPickerModal({ open, onClose, onSelect , currency }) {
 }
 
 /* ---------------- Product wise discount popup ---------------- */
-function ItemDiscountModal({ open, item, onClose, onApply }) {
+function ItemDiscountModal({ open, item, currency, onClose, onApply }) {
   const [type, setType] = useState("amount");
   const [value, setValue] = useState("");
   useEffect(() => {
@@ -596,7 +637,7 @@ function ItemDiscountModal({ open, item, onClose, onApply }) {
           <FormLayout.Group>
             <Select label="Discount type" options={TYPE_OPTIONS} value={type} onChange={setType} />
             <TextField label="Value" type="number" min={0} autoComplete="off" value={value} onChange={setValue}
-              prefix={type === "amount" ? "$" : undefined} suffix={type === "percentage" ? "%" : undefined} />
+              prefix={type === "amount" ? currencySymbol(currency) : undefined} suffix={type === "percentage" ? "%" : undefined} />
           </FormLayout.Group>
         </FormLayout>
       </Modal.Section>
@@ -1247,6 +1288,7 @@ export default function QuoteDetailPage() {
 
       {/* Add discount / shipping / tax popups */}
       <DiscountModal
+        currency={getCurrency(quote)}
         open={modal === "discount"}
         value={extras.discount}
         onClose={() => setModal(null)}
@@ -1261,6 +1303,8 @@ export default function QuoteDetailPage() {
         onApply={(v) => { setExtras((p) => ({ ...p, shipping: v })); setModal(null); }}
       />
       <TaxModal
+        quoteId={quoteId}
+        currency={getCurrency(quote)}
         open={modal === "tax"}
         value={extras.tax}
         onClose={() => setModal(null)}
@@ -1324,6 +1368,7 @@ export default function QuoteDetailPage() {
 
       {/* Add custom item -> manually add an item that is not in the Shopify catalog */}
       <CustomItemModal
+        currency={getCurrency(quote)}
         open={modal === "customItem"}
         onClose={() => setModal(null)}
         onAdd={addCustomItem}
@@ -1331,6 +1376,7 @@ export default function QuoteDetailPage() {
 
       {/* Product wise discount popup */}
       <ItemDiscountModal
+        currency={getCurrency(quote)}
         open={discItemId != null}
         item={items.find((x) => x.id === discItemId)}
         onClose={() => setDiscItemId(null)}
@@ -1451,7 +1497,7 @@ export default function QuoteDetailPage() {
                         : "")}
                     {taxAmt > 0 && taxWarn && (
                       <Banner tone="warning" onDismiss={() => setTaxWarn(false)}>
-                        This tax won't show up in draft order created from this quote.
+                        Draft order tax is calculated by Shopify from your store tax settings and the shipping address, so it can differ from this tax.
                       </Banner>
                     )}
                     <Divider />

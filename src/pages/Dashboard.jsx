@@ -22,18 +22,18 @@ const RANGES = [
 /* ---------------- helpers ---------------- */  
 const money = (n, currency = 'USD') => {
   try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(n || 0));
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Number(n || 0));
   } catch {
-    return `$${Number(n || 0).toFixed(2)}`;
+    return `${currency} ${Number(n || 0).toFixed(2)}`;
   }
 };
 
 // y-axis mate nano format: $1.2K
 const compactMoney = (n, currency = 'USD') => {
   try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(Number(n || 0));
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(Number(n || 0));
   } catch {
-    return `$${n}`;
+    return `${currency} ${n}`;
   }
 };
 
@@ -130,7 +130,24 @@ export default function Dashboard() {
   const [rangeOpen, setRangeOpen] = useState(false);
   const [hidden, setHidden] = useState({}); // dismissed cards
 
-  const { data, loading, error, shop } = useShop(`/dashboard/stats?days=${days}`);
+  const { data, loading, error, shop, refetch } = useShop(`/dashboard/stats?days=${days}`);
+
+  // Navi app release aave tyare merchant ne "Update now" batavo (store-side setup fari run thay chhe)
+  const [updating, setUpdating] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
+  const applyUpdate = async () => {
+    setUpdating(true);
+    setUpdateError(null);
+    try {
+      await api.post(`/dashboard/apply-update?shop=${encodeURIComponent(shop || '')}`);
+      await refetch();
+      recheckEmbed(true);
+    } catch (err) {
+      setUpdateError(err.response?.data?.message || 'Could not update right now. Please try again.');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   // App embed ON/OFF status: nav menu, route guard ane aa page badhu ek j context (AppEmbedContext) thi vaape chhe.
   // Theme editor ma toggle karine pacha aavo to focus par auto re-check thay chhe.
@@ -155,6 +172,17 @@ export default function Dashboard() {
       <Page>
         <BlockStack gap="400">
           {error && <Banner tone="critical">{error}</Banner>}
+
+          {data?.update_available && (
+            <Banner
+              tone="info"
+              title="A new version of Quote App is available"
+              action={{ content: updating ? 'Updating...' : 'Update now', onAction: applyUpdate, loading: updating, disabled: updating }}
+            >
+              <p>{data.release_notes || 'We have improved the app. Click Update now to apply the latest changes to your store.'}</p>
+              {updateError && <p style={{ color: '#d72c0d', marginTop: 8 }}>{updateError}</p>}
+            </Banner>
+          )}
 
           {/* App embed off hoy tyare sudhi baki app lock (nav menu + route guard) */}
           {embedStatus === 'off' && (
