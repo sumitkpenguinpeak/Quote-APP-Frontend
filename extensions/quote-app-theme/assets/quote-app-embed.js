@@ -27,7 +27,7 @@
      * ===================================================================== */
     // App proxy path: dev app = /apps/quote-app, live app = /apps/quote-app (shopify.app.toml > [app_proxy] subpath).
     // Path khotho hoy to Shopify 404 (HTML) aape chhe -> bijo path automatically try thay, jethi buttons gayab na thay.
-    const QUOTE_PROXY_CANDIDATES = window.PPQuoteApiUrl ? [window.PPQuoteApiUrl] : ['/apps/quote-app', '/apps/quote-app'];
+    const QUOTE_PROXY_CANDIDATES = window.PPQuoteApiUrl ? [window.PPQuoteApiUrl] : ['/apps/dev-quote-app', '/apps/quote-app'];
     let quoteProxyIndex = 0;
     function defaultMoneyFormat() {
         try {
