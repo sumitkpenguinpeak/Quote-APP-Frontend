@@ -468,10 +468,73 @@
             showQuoteToast('Could not add this product to your quote. Please try again.', true);
             return false;
         }
-        const item = buildItemFromProduct(product, opts.variantId, opts.quantity || 1);
+        let variantId = opts.variantId;
+        // Multi-variant product collection page par: customer ne variant select karva dyo
+        if (!variantId && opts.pickVariant && (product.variants || []).length > 1) {
+            variantId = await showVariantPicker(product);
+            if (!variantId) return false; // cancel
+        }
+        const item = buildItemFromProduct(product, variantId, opts.quantity || 1);
         mergeItemsIntoQuote([item], opts.source, false);
         showQuoteToast('Your quote is successfully added');
         return true;
+    }
+
+    // Nano variant picker popup (collection page par multi-variant product mate). Resolve: variant id ke null (cancel)
+    function showVariantPicker(product) {
+        return new Promise(function (resolve) {
+            const variants = product.variants || [];
+            const overlay = document.createElement('div');
+            overlay.className = 'pp-variant-overlay';
+            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;';
+
+            const box = document.createElement('div');
+            box.style.cssText = 'background:#fff;color:#111;border-radius:10px;padding:20px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25);';
+
+            const title = document.createElement('div');
+            title.style.cssText = 'font-weight:600;font-size:16px;margin-bottom:12px;';
+            title.textContent = product.title || '';
+
+            const select = document.createElement('select');
+            select.style.cssText = 'width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:14px;margin-bottom:14px;background:#fff;color:#111;';
+            variants.forEach(function (v) {
+                const o = document.createElement('option');
+                o.value = String(v.id);
+                o.textContent = (v.title || '') + (v.price ? ' - ' + formatMoney(parseFloat(v.price)) : '');
+                select.appendChild(o);
+            });
+
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;';
+
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.textContent = 'Cancel';
+            cancel.style.cssText = 'padding:10px 14px;border:1px solid #ccc;border-radius:6px;background:#fff;color:#111;cursor:pointer;';
+
+            const confirm = createQuoteButton();
+            confirm.style.width = 'auto';
+
+            function close(val) {
+                document.removeEventListener('keydown', onKey);
+                overlay.remove();
+                resolve(val);
+            }
+            function onKey(e) { if (e.key === 'Escape') close(null); }
+
+            cancel.addEventListener('click', function () { close(null); });
+            confirm.addEventListener('click', function () { close(select.value); });
+            overlay.addEventListener('click', function (e) { if (e.target === overlay) close(null); });
+            document.addEventListener('keydown', onKey);
+
+            row.appendChild(cancel);
+            row.appendChild(confirm);
+            box.appendChild(title);
+            box.appendChild(select);
+            box.appendChild(row);
+            overlay.appendChild(box);
+            document.body.appendChild(overlay);
+        });
     }
 
     function setBusy(btn, busy) {
@@ -494,6 +557,14 @@
     }
 
     /* ---------- collection page ---------- */
+    // Quick-add popup (multi-variant product ma variant picker + hidden add-to-cart), swatch ane hidden elements
+    const HIDDEN_OR_OPTION_SELECTOR =
+        'dialog, [role="dialog"], template, [hidden], [aria-hidden="true"], [class*="modal" i], [class*="quick-add-modal" i], [class*="swatch" i], [class*="variant-picker" i]';
+
+    function isVisible(el) {
+        return !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+    }
+
     function findCardAncestor(link) {
         let el = link;
         let depth = 0;
@@ -503,6 +574,8 @@
             // ek card ma ek j product hovo joie
             const handles = new Set();
             el.querySelectorAll('a[href*="/products/"]').forEach(function (a) {
+                // quick-add popup / variant swatch na links card na product ma na ganvā (multi-variant card ma aava links hoy chhe)
+                if (a.closest(HIDDEN_OR_OPTION_SELECTOR)) return;
                 const h = productHandleFromHref(a.getAttribute('href'));
                 if (h) handles.add(h);
             });
@@ -537,13 +610,31 @@
             e.preventDefault();
             e.stopPropagation();
             setBusy(btn, true);
-            await addProductByHandle(productHandle, { source: 'collection_page', quantity: 1 });
+            await addProductByHandle(productHandle, { source: 'collection_page', quantity: 1, pickVariant: true });
             setBusy(btn, false);
         });
 
-        const addToCartBtn = card.querySelector('button[name="add"], [class*="add-to-cart" i]');
+        // Add-to-cart button fakt tyare j vaprvu jyare te card ma dekhatu hoy. Multi-variant product ma add button
+        // quick-add popup (dialog) ni andar hoy chhe -> tya button chhupai jay, etle card na price/info pachhi mukvu.
+        const addToCartBtn = Array.prototype.slice.call(
+            card.querySelectorAll('button[name="add"], [class*="add-to-cart" i], [class*="quick-add" i] button')
+        ).find(function (el) { return !el.closest(HIDDEN_OR_OPTION_SELECTOR) && isVisible(el); });
+
         if (addToCartBtn) {
             addToCartBtn.insertAdjacentElement('afterend', btn);
+            return;
+        }
+
+        const priceEl = Array.prototype.slice.call(card.querySelectorAll('[class*="price" i]'))
+            .find(function (el) { return !el.closest(HIDDEN_OR_OPTION_SELECTOR) && isVisible(el); });
+        if (priceEl) {
+            // price na sauthi bahar na wrapper pachhi (price ni andar na span ma nahi)
+            let anchor = priceEl;
+            while (anchor.parentElement && anchor.parentElement !== card && !anchor.parentElement.querySelector('a[href*="/products/"]')) {
+                anchor = anchor.parentElement;
+            }
+            anchor.insertAdjacentElement('afterend', btn);
+            btn.style.marginTop = btn.style.marginTop || '8px';
         } else {
             card.appendChild(btn);
         }
