@@ -311,6 +311,7 @@ export default function Dashboard() {
                       <Thumbnail size="small" alt={p.title} source={p.image || ImageIcon} />
                       <BlockStack gap="050">
                         <Text as="span" variant="bodyMd" fontWeight="semibold">{p.title}</Text>
+                        {p.sku && <Text as="span" variant="bodySm" tone="subdued">SKU: {p.sku}</Text>}
                         <Text as="span" variant="bodySm" tone="subdued">{p.quantity} unit{Number(p.quantity) === 1 ? '' : 's'}</Text>
                       </BlockStack>
                     </InlineStack>

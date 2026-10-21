@@ -500,7 +500,7 @@
             variants.forEach(function (v) {
                 const o = document.createElement('option');
                 o.value = String(v.id);
-                o.textContent = (v.title || '') + (v.price ? ' - ' + formatMoney(parseFloat(v.price)) : '');
+                o.textContent = (v.title || '') + (v.sku ? ' (SKU: ' + v.sku + ')' : '') + (v.price ? ' - ' + formatMoney(parseFloat(v.price)) : '');
                 select.appendChild(o);
             });
 
