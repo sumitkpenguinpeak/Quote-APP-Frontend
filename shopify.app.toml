@@ -5,7 +5,7 @@ name = "PP Quick Quote"
 application_url = "https://quote-app-frontend-git-main-sk-9093.vercel.app"
 embedded = true
 
-[webhooks]
+[webhooks] 
 api_version = "2026-10"
 
 [[webhooks.subscriptions]]
