@@ -92,6 +92,8 @@ function mapQuote(raw) {
     status: q.status ?? "",
     currency: q.currency ?? null, // store ni currency (INR / USD ...), getCurrency(quote) aa j vape chhe
     draftOrderId: q.shopify_draft_order_id ?? null, // draft order ban gayo hoy to id aave
+    isLocked: Boolean(q.is_locked), // draft order paid thay pachi quote locked (edit/update bandh)
+    paidAt: q.paid_at ?? null,
     createdAt,
     name,
     email,
@@ -1255,6 +1257,7 @@ export default function QuoteDetailPage() {
   }
 
   const receivedAt = [fmtDate(quote.createdAt), fmtTime(quote.createdAt)].filter(Boolean).join(", ");
+  const isLocked = Boolean(quote.isLocked); // draft order paid -> quote read-only
 
   return (
     <Page
@@ -1262,7 +1265,7 @@ export default function QuoteDetailPage() {
       title={`Quote ${quote.number}`}
       subtitle={receivedAt && `Received by ${receivedAt}`}
       secondaryActions={[{ content: duplicating ? "Duplicating…" : "Duplicate", onAction: handleDuplicate, disabled: duplicating }]}
-      actionGroups={[{ title: "More actions", actions: [{ content: exporting ? "Exporting…" : "Export Quote", onAction: handleExport, disabled: exporting }, ...(quote.draftOrderId ? [{ content: invoiceDownloading ? "Preparing invoice…" : "Download invoice", onAction: handleDownloadInvoice, disabled: invoiceDownloading }, { content: "Send invoice", onAction: startSendInvoice }] : []), ...(quote.draftOrderId ? [{ content: "Update draft order", onAction: () => syncDraftOrder("to"), disabled: !plan.can("sync") }] : []), { content: quote.status === "cancelled" ? "Quote cancelled" : "Cancel Quote", disabled: ["cancelled", "converted"].includes(quote.status), onAction: () => { setCancelError(null); setModal("cancelQuote"); } }, { content: "Delete", destructive: true, onAction: () => { setDeleteError(null); setModal("deleteQuote"); } }] }]}
+      actionGroups={[{ title: "More actions", actions: [{ content: exporting ? "Exporting…" : "Export Quote", onAction: handleExport, disabled: exporting }, ...(quote.draftOrderId ? [{ content: invoiceDownloading ? "Preparing invoice…" : "Download invoice", onAction: handleDownloadInvoice, disabled: invoiceDownloading }, { content: "Send invoice", onAction: startSendInvoice, disabled: isLocked }] : []), ...(quote.draftOrderId ? [{ content: "Update draft order", onAction: () => syncDraftOrder("to"), disabled: isLocked || !plan.can("sync") }] : []), { content: quote.status === "cancelled" ? "Quote cancelled" : "Cancel Quote", disabled: isLocked || ["cancelled", "converted"].includes(quote.status), onAction: () => { setCancelError(null); setModal("cancelQuote"); } }, { content: "Delete", destructive: true, onAction: () => { setDeleteError(null); setModal("deleteQuote"); } }] }]}
       primaryAction={
         quote.draftOrderId
           ? { content: "View draft order", onAction: openDraftOrder }
@@ -1270,7 +1273,15 @@ export default function QuoteDetailPage() {
       }
     >
       {/* Shopify nu native top Save Bar - fakt isDirty hoy tyare dekhay */}
-      <AppBridgeSaveBar visible={isDirty} saving={saving} onSave={handleSave} onDiscard={handleDiscard} />
+      <AppBridgeSaveBar visible={isDirty && !isLocked} saving={saving} onSave={handleSave} onDiscard={handleDiscard} />
+
+      {isLocked && (
+        <Box paddingBlockEnd="400">
+          <Banner tone="success" title="Draft order paid - this quote is locked">
+            This quote can no longer be edited or synced because its draft order has been marked as paid.
+          </Banner>
+        </Box>
+      )}
 
       {!plan.loading && (!plan.can("draft_order") || !plan.can("pricing_settings")) && (
         <Box paddingBlockEnd="400">
@@ -1407,6 +1418,8 @@ export default function QuoteDetailPage() {
         </Box>
       )}
 
+      {/* Locked quote: fieldset disabled -> andar na badha input/button disable */}
+      <fieldset disabled={isLocked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <Layout>
         {/* ============ LEFT ============ */}
         <Layout.Section>
@@ -1600,6 +1613,7 @@ export default function QuoteDetailPage() {
           </BlockStack>
         </Layout.Section>
       </Layout>
+      </fieldset>
     </Page>
   );
 }
