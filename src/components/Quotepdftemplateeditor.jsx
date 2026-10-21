@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { fileToLogoDataUrl } from "../utils/logoImage";
 import {
   BlockStack, InlineStack, Card, Text, TextField, Checkbox, RangeSlider, Select,
   Button, Banner, Badge, Icon, Box, Collapsible, Divider,
@@ -239,13 +240,11 @@ export default function QuotePdfTemplateEditor() {
   );
   const num = (path) => (v) => update(path, Number(v) || 0);
 
-  const onLogo = (e) => {
+  const onLogo = async (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => update(["style", "logo"], reader.result);
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file) return;
+    update(["style", "logo"], await fileToLogoDataUrl(file));
   };
 
   /* ----- panels ----- */
