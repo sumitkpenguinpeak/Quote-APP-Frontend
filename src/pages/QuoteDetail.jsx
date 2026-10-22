@@ -110,7 +110,7 @@ function mapQuote(raw) {
 const DEFAULT_EXTRAS = {
   discount: { type: "amount", value: 0, reason: "", showOnDraftOrder: false, showOnEmail: false, showOnInvoicePdf: false, showOnPdf: false },
   shipping: { mode: "custom", rate: 0, name: "" },
-  tax: { type: "amount", value: 0, name: "" },
+  tax: { type: "amount", value: 0, name: "", shippingRate: 0 }, // shippingRate = Shopify shipping override % (shipping par tax)
 };
 const TYPE_OPTIONS = [{ label: "Amount", value: "amount" }, { label: "Percentage", value: "percentage" }];
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -130,7 +130,7 @@ function mapExtras(q) {
       showOnPdf: !!q.discount_show_on_pdf,
     },
     shipping: { mode: "custom", rate: Number(q.shipping_rate ?? q.shipping ?? 0), name: q.shipping_name ?? "" },
-    tax: { type: q.tax_type ?? "amount", value: Number(q.tax_value ?? q.tax ?? 0), name: q.tax_name ?? "" },
+    tax: { type: q.tax_type ?? "amount", value: Number(q.tax_value ?? q.tax ?? 0), name: q.tax_name ?? "", shippingRate: Number(q.shipping_tax_value ?? 0) },
   };
 }
 
@@ -146,7 +146,9 @@ function computeTotals(items, extras) {
   const subtotal = items.reduce((a, i) => a + lineTotal(i), 0);
   const discountAmt = Math.min(calcAmount(extras.discount, subtotal), subtotal);
   const shippingAmt = round2(extras.shipping.rate);
-  const taxAmt = calcAmount(extras.tax, subtotal - discountAmt);
+  // Shipping override (Shopify): percentage tax hoy tyare shipping par alag % tax
+  const shippingTax = extras.tax.type === "percentage" ? round2((shippingAmt * (Number(extras.tax.shippingRate) || 0)) / 100) : 0;
+  const taxAmt = round2(calcAmount(extras.tax, subtotal - discountAmt) + shippingTax);
   return { subtotal, discountAmt, shippingAmt, taxAmt, total: subtotal - discountAmt + shippingAmt + taxAmt };
 }
 
@@ -169,6 +171,7 @@ const extrasPayload = (items, extras) => {
     tax_type: x.type,
     tax_value: Number(x.value) || 0,
     tax_name: x.name,
+    shipping_tax_value: x.type === "percentage" ? Number(x.shippingRate) || 0 : 0,
   };
 };
 
@@ -364,11 +367,12 @@ function TaxModal({ open, value, quoteId, currency, onClose, onApply }) {
   const hasStoreTax = storeTax && storeTax.rate !== null && storeTax.rate !== undefined;
 
   const useStoreTax = () =>
-    setX((p) => ({ ...p, type: "percentage", value: storeTax.rate, name: storeTax.name ?? p.name }));
+    setX((p) => ({ ...p, type: "percentage", value: storeTax.rate, name: storeTax.name ?? p.name, shippingRate: Number(storeTax.shipping_rate) || 0 }));
 
   const apply = () => {
     const n = Math.max(0, Number(x.value) || 0);
-    onApply({ ...x, value: pct ? Math.min(n, 100) : n });
+    const sr = Math.min(100, Math.max(0, Number(x.shippingRate) || 0));
+    onApply({ ...x, value: pct ? Math.min(n, 100) : n, shippingRate: pct ? sr : 0 });
   };
   return (
     <Modal open={open} onClose={onClose} title="Add Tax Rate"
@@ -382,6 +386,7 @@ function TaxModal({ open, value, quoteId, currency, onClose, onApply }) {
               <BlockStack gap="200">
                 <Text as="p">
                   Shopify store tax for this customer: {storeTax.rate}%{storeTax.name ? ` (${storeTax.name})` : ""}
+                  {Number(storeTax.shipping_rate) > 0 ? ` · ${storeTax.shipping_rate}% on shipping (shipping override)` : ""}
                 </Text>
                 <InlineStack>
                   <Button onClick={useStoreTax}>Use Shopify store tax</Button>
@@ -398,6 +403,11 @@ function TaxModal({ open, value, quoteId, currency, onClose, onApply }) {
               value={numValue(x.value)} onChange={set("value")}
               prefix={pct ? undefined : currencySymbol(currency)} suffix={pct ? "%" : undefined} />
           </FormLayout.Group>
+          {pct && (
+            <TextField label="Tax on shipping (shipping override)" type="number" min={0} max={100} autoComplete="off" placeholder="0"
+              suffix="%" helpText="Shopify shipping override rate, e.g. 20% for Gujarat. Leave 0 if shipping is not taxed."
+              value={numValue(x.shippingRate)} onChange={set("shippingRate")} />
+          )}
           <TextField label="Tax name" placeholder="VAT" maxLength={15} showCharacterCount autoComplete="off"
             value={x.name} onChange={set("name")} />
         </FormLayout>
@@ -1506,7 +1516,7 @@ export default function QuoteDetailPage() {
                     {extraRow("shipping", "Add shipping", "Edit shipping", shippingAmt, shippingAmt > 0 ? extras.shipping.name : "")}
                     {extraRow("tax", "Add tax", "Edit tax", taxAmt,
                       taxAmt > 0
-                        ? [extras.tax.name, extras.tax.type === "percentage" ? `(${extras.tax.value}%)` : ""].filter(Boolean).join(" ")
+                        ? [extras.tax.name, extras.tax.type === "percentage" ? `(${extras.tax.value}%${Number(extras.tax.shippingRate) > 0 ? ` + ${extras.tax.shippingRate}% on shipping` : ""})` : ""].filter(Boolean).join(" ")
                         : "")}
                     {taxAmt > 0 && taxWarn && (
                       <Banner tone="warning" onDismiss={() => setTaxWarn(false)}>
