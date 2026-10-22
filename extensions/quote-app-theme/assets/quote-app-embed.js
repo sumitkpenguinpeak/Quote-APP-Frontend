@@ -1382,7 +1382,9 @@
         const shipping = rate ? (Number(rate.price) || 0) : 0;
         // Shopify store tax (estimate) - address ane items par aadharit, shipping-rates response sathe aave chhe
         const taxInfo = ppShipState && !ppShipState.loading ? ppShipState.tax : null;
-        const tax = taxInfo ? (Number(taxInfo.amount) || 0) : 0;
+        // items tax + shipping override tax (e.g. Gujarat shipping 20%) - shipping select thay tyare j
+        const shipTaxRate = taxInfo ? (Number(taxInfo.shipping_rate) || 0) : 0;
+        const tax = taxInfo ? Math.round(((Number(taxInfo.amount) || 0) + shipping * shipTaxRate / 100) * 100) / 100 : 0;
         return { subtotal: subtotal, rate: rate, shipping: shipping, taxInfo: taxInfo, tax: tax, total: subtotal + shipping + tax };
     }
 
@@ -1635,7 +1637,8 @@
                 h += '</div>';
             }
             if (t.tax > 0) {
-                const taxLabel = [t.taxInfo.name, t.taxInfo.rate ? '(' + t.taxInfo.rate + '%)' : ''].filter(Boolean).join(' ');
+                const shipTaxPart = t.shipping > 0 && Number(t.taxInfo.shipping_rate) > 0 ? ' + ' + t.taxInfo.shipping_rate + '% on shipping' : '';
+                const taxLabel = [t.taxInfo.name, t.taxInfo.rate ? '(' + t.taxInfo.rate + '%' + shipTaxPart + ')' : ''].filter(Boolean).join(' ');
                 h += '<div class="total-row Quotetax">';
                 h += '<span>Estimated tax' + (taxLabel ? ' (' + esc(taxLabel) + ')' : '') + '</span>';
                 h += '<span class="amount">' + formatMoney(t.tax) + '</span>';
